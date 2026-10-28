@@ -92,6 +92,14 @@ Run the weight experiment (energy doubled, genre halved):
 python -m src.main --experiment
 ```
 
+Switch scoring modes (Strategy pattern): `genre-first` (default), `mood-first`, or `energy-focused`:
+
+```bash
+python -m src.main --mode mood-first
+```
+
+See [ai_interactions.md](ai_interactions.md#design-pattern-sf10) for how the modes work and how they change the rankings.
+
 ### Running Tests
 
 ```bash
