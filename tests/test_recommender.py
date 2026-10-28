@@ -59,3 +59,29 @@ def test_explain_recommendation_returns_non_empty_string():
     explanation = rec.explain_recommendation(user, song)
     assert isinstance(explanation, str)
     assert explanation.strip() != ""
+
+
+def test_scoring_modes_change_the_ranking():
+    from src.recommender import recommend_songs, STRATEGIES
+
+    songs = [
+        {"title": "Pop But Intense", "genre": "pop", "mood": "intense", "energy": 0.8, "acousticness": 0.2},
+        {"title": "Rock But Happy", "genre": "rock", "mood": "happy", "energy": 0.8, "acousticness": 0.2},
+    ]
+    prefs = {"genre": "pop", "mood": "happy", "energy": 0.8}
+
+    genre_first = recommend_songs(prefs, songs, k=1, strategy=STRATEGIES["genre-first"])
+    mood_first = recommend_songs(prefs, songs, k=1, strategy=STRATEGIES["mood-first"])
+
+    assert genre_first[0][0]["title"] == "Pop But Intense"
+    assert mood_first[0][0]["title"] == "Rock But Happy"
+
+
+def test_mood_first_gives_partial_credit_for_related_mood():
+    from src.recommender import STRATEGIES
+
+    song = {"title": "Lazy Sunday", "genre": "jazz", "mood": "relaxed", "energy": 0.4, "acousticness": 0.8}
+    score, reasons = STRATEGIES["mood-first"].score({"genre": "lofi", "mood": "chill"}, song)
+
+    assert score == 1.0
+    assert reasons[0].startswith("related mood")

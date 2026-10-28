@@ -122,11 +122,66 @@ def score_song(user_prefs: Dict, song: Dict, weights: Optional[Dict] = None) -> 
 
     return round(score, 2), reasons
 
-def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5, weights: Optional[Dict] = None) -> List[Tuple[Dict, float, str]]:
+# --- Scoring modes (Strategy pattern) ---------------------------------------
+# Each strategy exposes the same score(user_prefs, song) method, so
+# recommend_songs can swap ranking behavior without any if/else on the mode.
+
+# Moods that feel alike; MoodFirst gives half credit for a mood in the same family.
+MOOD_FAMILIES = [
+    {"chill", "relaxed", "focused"},
+    {"happy", "euphoric", "confident"},
+    {"intense", "angry"},
+    {"sad", "melancholy", "moody", "nostalgic"},
+]
+
+class ScoringStrategy:
+    """Base strategy: score songs with a fixed set of weights."""
+    name = "base"
+    description = ""
+    weights = DEFAULT_WEIGHTS
+
+    def score(self, user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
+        """Return (score, reasons) for one song under this strategy."""
+        return score_song(user_prefs, song, self.weights)
+
+class GenreFirst(ScoringStrategy):
+    """Original recipe: genre is the strongest signal."""
+    name = "genre-first"
+    description = "genre +2.0, mood +1.0, energy up to +1.5, acoustic up to +0.5"
+
+class MoodFirst(ScoringStrategy):
+    """Mood outweighs genre, with half credit for related moods."""
+    name = "mood-first"
+    description = "mood +2.0 (related mood +1.0), genre +1.0, energy up to +1.5, acoustic up to +0.5"
+    weights = {**DEFAULT_WEIGHTS, "genre": 1.0, "mood": 2.0}
+
+    def score(self, user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
+        """Score with the base rules, then add partial credit for a related mood."""
+        score, reasons = super().score(user_prefs, song)
+        target = user_prefs.get("mood")
+        if song["mood"] != target and any({song["mood"], target} <= family for family in MOOD_FAMILIES):
+            bonus = self.weights["mood"] / 2
+            score += bonus
+            reasons.insert(0, f"related mood: {song['mood']} ~ {target} (+{bonus:.2f})")
+        return round(score, 2), reasons
+
+class EnergyFocused(ScoringStrategy):
+    """Energy closeness dominates; labels are tie-breakers."""
+    name = "energy-focused"
+    description = "energy up to +3.0, genre +0.5, mood +0.5, acoustic up to +0.5"
+    weights = {**DEFAULT_WEIGHTS, "genre": 0.5, "mood": 0.5, "energy": 3.0}
+
+STRATEGIES = {s.name: s for s in (GenreFirst(), MoodFirst(), EnergyFocused())}
+
+def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5, weights: Optional[Dict] = None,
+                    strategy: Optional[ScoringStrategy] = None) -> List[Tuple[Dict, float, str]]:
     """Score every song, sort highest first, and return the top k as (song, score, explanation)."""
     scored = []
     for song in songs:
-        score, reasons = score_song(user_prefs, song, weights)
+        if strategy:
+            score, reasons = strategy.score(user_prefs, song)
+        else:
+            score, reasons = score_song(user_prefs, song, weights)
         scored.append((song, score, "; ".join(reasons)))
     # sorted() returns a new list and leaves `songs` untouched; ties break by title for stable output.
     return sorted(scored, key=lambda item: (-item[1], item[0]["title"]))[:k]

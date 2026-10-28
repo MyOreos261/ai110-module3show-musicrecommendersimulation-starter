@@ -4,11 +4,13 @@ Command line runner for the Music Recommender Simulation.
 Run from the project root with:  python -m src.main
 Add --experiment to rerun every profile with the experimental weights
 (energy doubled, genre halved).
+Add --mode <name> to pick a scoring strategy: genre-first (default),
+mood-first, or energy-focused.
 """
 
 import sys
 
-from src.recommender import load_songs, recommend_songs, EXPERIMENT_WEIGHTS
+from src.recommender import load_songs, recommend_songs, EXPERIMENT_WEIGHTS, STRATEGIES
 
 PROFILES = {
     # Starter / default profile
@@ -38,12 +40,19 @@ def print_recommendations(name: str, prefs: dict, recommendations: list) -> None
 def main() -> None:
     songs = load_songs("data/songs.csv")
     weights = EXPERIMENT_WEIGHTS if "--experiment" in sys.argv else None
-    if weights:
+    strategy = None
+    if "--mode" in sys.argv:
+        mode = sys.argv[sys.argv.index("--mode") + 1] if sys.argv.index("--mode") + 1 < len(sys.argv) else ""
+        if mode not in STRATEGIES:
+            sys.exit(f"Unknown mode '{mode}'. Choose from: {', '.join(STRATEGIES)}")
+        strategy = STRATEGIES[mode]
+        print(f"SCORING MODE: {strategy.name} ({strategy.description})")
+    elif weights:
         print(f"EXPERIMENT MODE: weights = {weights}")
     print()
 
     for name, prefs in PROFILES.items():
-        recommendations = recommend_songs(prefs, songs, k=5, weights=weights)
+        recommendations = recommend_songs(prefs, songs, k=5, weights=weights, strategy=strategy)
         print_recommendations(name, prefs, recommendations)
 
 
